@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RollCall — PPTX Merge &amp; QR Generator</title>
+<meta name="author" content="Arumugam Mariappan">
+<meta name="description" content="RollCall — built and owned by Arumugam Mariappan (m_aru_1978@yahoo.com). Mail-merge PPTX files and batch-generate QR codes, entirely on-device.">
+<link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#1c2b4a">
+<link rel="icon" href="./favicon.ico" sizes="any">
+<link rel="icon" href="./icons/favicon-16.png" sizes="16x16" type="image/png">
+<link rel="icon" href="./icons/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="./icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="RollCall">
+
+<!-- Libraries: all free, MIT-licensed, run entirely in the browser -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    --ink:#1c2b4a;        /* registration-desk navy */
+    --ink-soft:#3f4d6b;
+    --paper:#f7f4ec;       /* ivory desk paper */
+    --card:#fffdf7;
+    --line:#ddd6c4;
+    --accent:#c1442e;      /* stamped red — actions only */
+    --accent-ink:#fbf3e9;
+    --muted:#8a8574;
+    --warn:#8a5a1f;
+    --warn-bg:#f3e6cf;
+    --mono: "IBM Plex Mono", "SFMono-Regular", Menlo, monospace;
+    --sans: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --serif: "Source Serif 4", Georgia, "Times New Roman", serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:var(--sans);
+    line-height:1.55;
+  }
+  header{
+    padding:36px 24px 22px;
+    border-bottom:2px solid var(--ink);
+    display:flex;
+    align-items:baseline;
+    gap:18px;
+    flex-wrap:wrap;
+  }
+  header h1{
+    margin:0;
+    font-family:var(--serif);
+    font-weight:700;
+    font-size:1.7rem;
+    letter-spacing:-0.01em;
+  }
+  header p{
+    margin:0;
+    color:var(--ink-soft);
+    max-width:520px;
+    font-size:0.92rem;
+  }
+  .tabs{
+    display:flex;
+    gap:6px;
+    padding:14px 24px 0;
+    background:transparent;
+  }
+  .tab{
+    padding:11px 20px 13px;
+    cursor:pointer;
+    font-family:var(--serif);
+    font-size:0.96rem;
+    color:var(--muted);
+    background:#ece5d2;
+    border:1px solid var(--line);
+    border-bottom:2px solid var(--ink);
+    border-radius:7px 7px 0 0;
+    user-select:none;
+    position:relative;
+    top:1px;
+  }
+  .tab.active{
+    color:var(--ink);
+    font-weight:600;
+    background:var(--card);
+    border-color:var(--ink);
+    border-bottom:2px solid var(--card);
+  }
+  main{
+    max-width:720px;
+    margin:0 auto;
+    padding:0 24px 90px;
+    border-left:2px solid var(--ink);
+    border-right:2px solid var(--ink);
+  }
+  section.panel{display:none; padding-top:26px;}
+  section.panel.active{display:block;}
+  .card{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:4px;
+    padding:22px;
+    margin-bottom:18px;
+  }
+  .card h2{
+    margin:0 0 8px;
+    font-family:var(--serif);
+    font-weight:600;
+    font-size:1.12rem;
+    padding-bottom:8px;
+    border-bottom:1px solid var(--line);
+  }
+  .card .hint{
+    color:var(--muted);
+    font-size:0.87rem;
+    margin:10px 0 14px;
+  }
+  .drop{
+    border:1.5px dashed var(--ink-soft);
+    border-radius:4px;
+    padding:18px;
+    text-align:center;
+    font-size:0.9rem;
+    color:var(--ink-soft);
+    cursor:pointer;
+    transition:border-color .15s, background .15s;
+  }
+  .drop:hover{border-color:var(--accent);}
+  .drop.has-file{
+    border-style:solid;
+    border-color:var(--accent);
+    color:var(--ink);
+    background:#fbeee9;
+  }
+  input[type=file]{display:none;}
+  .row{
+    display:flex;
+    gap:10px;
+    align-items:center;
+    margin-top:10px;
+    flex-wrap:wrap;
+  }
+  button{
+    font-family:var(--sans);
+    font-weight:600;
+    font-size:0.9rem;
+    letter-spacing:0.01em;
+    border:1.5px solid var(--accent);
+    background:var(--accent);
+    color:var(--accent-ink);
+    padding:10px 18px;
+    border-radius:3px;
+    cursor:pointer;
+  }
+  button.secondary{
+    background:transparent;
+    border-color:var(--ink-soft);
+    color:var(--ink);
+  }
+  button:disabled{
+    opacity:0.4;
+    cursor:not-allowed;
+  }
+  .field-table{
+    width:100%;
+    border-collapse:collapse;
+    font-size:0.85rem;
+    margin-top:10px;
+  }
+  .field-table th, .field-table td{
+    text-align:left;
+    padding:6px 8px;
+    border-bottom:1px solid var(--line);
+  }
+  .field-table code{
+    font-family:var(--mono);
+    background:#efe9d8;
+    padding:1px 5px;
+    border-radius:3px;
+  }
+  .note{
+    background:var(--warn-bg);
+    color:var(--warn);
+    border:1px solid #d9bd8a;
+    border-radius:4px;
+    padding:10px 12px;
+    font-size:0.85rem;
+    margin-top:12px;
+  }
+  .log{
+    font-family:var(--mono);
+    font-size:0.78rem;
+    background:var(--ink);
+    color:#e7ddc4;
+    border-radius:4px;
+    padding:12px;
+    max-height:160px;
+    overflow-y:auto;
+    white-space:pre-wrap;
+    margin-top:14px;
+    display:none;
+  }
+  .progress{
+    height:5px;
+    background:var(--line);
+    border-radius:3px;
+    overflow:hidden;
+    margin-top:12px;
+    display:none;
+  }
+  .progress > div{
+    height:100%;
+    background:var(--accent);
+    width:0%;
+    transition:width .15s;
+  }
+  .result{
+    margin-top:14px;
+    display:none;
+  }
+  .result a{
+    display:inline-block;
+    color:var(--accent);
+    font-weight:600;
+    text-decoration:none;
+    border-bottom:1.5px solid var(--accent);
+  }
+  .steps ol{padding-left:20px; font-size:0.9rem;}
+  .steps li{margin-bottom:6px;}
+  footer{
+    text-align:center;
+    color:var(--muted);
+    font-size:0.8rem;
+    padding:22px;
+    border-top:2px solid var(--ink);
+    max-width:720px;
+    margin:0 auto;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>RollCall</h1>
+  <p>Mail-merge a PPTX per row, and batch-generate QR codes — all processed on your device. Nothing is uploaded anywhere.</p>
+</header>
+
+<div class="tabs">
+  <div class="tab active" data-tab="pptx">PPTX Merge</div>
+  <div class="tab" data-tab="qr">QR Codes</div>
+</div>
+
+<main>
+
+  <!-- ===================== PPTX PANEL ===================== -->
+  <section class="panel active" id="panel-pptx">
+
+    <div class="card steps">
+      <h2>How to prepare your files</h2>
+      <ol>
+        <li>In your PPTX template, type placeholders exactly as <code>{{FirstName}}</code>, <code>{{PMI_ID}}</code> etc. wherever you want a value inserted — matching your spreadsheet's column headers (spaces/underscores/case don't matter).</li>
+        <li>Your CSV/XLSX must have a header row. "First name" and "Second name" columns are used for the output filename.</li>
+        <li>Upload both files below and generate.</li>
+      </ol>
+    </div>
+
+    <div class="card">
+      <h2>PPTX template</h2>
+      <p class="hint">The .pptx file containing your {{placeholders}}.</p>
+      <div class="drop" id="drop-pptx-tpl">Click or drop your .pptx template here</div>
+      <input type="file" id="file-pptx-tpl" accept=".pptx">
+    </div>
+
+    <div class="card">
+      <h2>Spreadsheet (CSV or XLSX)</h2>
+      <p class="hint">Must include First name, Second name, Email ID, PMI ID — plus any other columns you reference as placeholders.</p>
+      <div class="drop" id="drop-pptx-data">Click or drop your .csv / .xlsx here</div>
+      <input type="file" id="file-pptx-data" accept=".csv,.xlsx,.xls">
+      <table class="field-table" id="pptx-field-preview" style="display:none;"></table>
+    </div>
+
+    <div class="card">
+      <h2>Generate</h2>
+      <div class="row">
+        <button id="btn-pptx-zip" disabled>Download ZIP of PPTX files</button>
+        <button id="btn-pptx-pdf" class="secondary" disabled title="See note below">Download ZIP of PDF files</button>
+      </div>
+      <div class="note">
+        PDF export for Feature 1 needs a real slide-rendering engine (fonts, layout, masters) — no free library does this reliably in the browser. This button is a placeholder; see the chat reply for options if you want it enabled later via an external conversion API.
+      </div>
+      <div class="progress" id="pptx-progress"><div></div></div>
+      <div class="log" id="pptx-log"></div>
+      <div class="result" id="pptx-result"></div>
+    </div>
+  </section>
+
+  <!-- ===================== QR PANEL ===================== -->
+  <section class="panel" id="panel-qr">
+
+    <div class="card steps">
+      <h2>How to prepare your file</h2>
+      <ol>
+        <li>Your CSV/XLSX needs columns for First name, Second name, and a QR Link (the URL/text to encode).</li>
+        <li>Upload it below, then choose ZIP of PNGs or ZIP of individual PDFs (one PDF per person).</li>
+      </ol>
+    </div>
+
+    <div class="card">
+      <h2>Spreadsheet (CSV or XLSX)</h2>
+      <div class="drop" id="drop-qr-data">Click or drop your .csv / .xlsx here</div>
+      <input type="file" id="file-qr-data" accept=".csv,.xlsx,.xls">
+      <table class="field-table" id="qr-field-preview" style="display:none;"></table>
+    </div>
+
+    <div class="card">
+      <h2>Generate</h2>
+      <div class="row">
+        <button id="btn-qr-zip" disabled>Download ZIP of QR PNGs</button>
+        <button id="btn-qr-pdf" disabled>Download ZIP of QR PDFs</button>
+      </div>
+      <div class="progress" id="qr-progress"><div></div></div>
+      <div class="log" id="qr-log"></div>
+      <div class="result" id="qr-result"></div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <p style="margin:0 0 4px;">Runs 100% client-side. Deployable free on GitHub Pages / Cloudflare Pages.</p>
+  <p style="margin:0;">This app is built &amp; owned by <strong>Arumugam Mariappan</strong> —
+    <a href="mailto:m_aru_1978@yahoo.com" style="color:var(--ink); border-bottom:1px solid var(--line);">m_aru_1978@yahoo.com</a>
+    · <a href="tel:+918056023410" style="color:var(--ink); border-bottom:1px solid var(--line);">+91 80560 23410</a>
+  </p>
+</footer>
+
+<script>
+/* ---------------------------------------------------------------
+   Shared helpers
+---------------------------------------------------------------- */
+function norm(s){
+  return String(s || '').toLowerCase().replace(/[\s_\-]/g,'');
+}
+
+function normalizeRow(row){
+  const out = {};
+  for (const k in row) out[norm(k)] = row[k] === undefined || row[k] === null ? '' : String(row[k]);
+  return out;
+}
+
+function findField(normRow, candidates){
+  for (const c of candidates){
+    if (normRow[c] !== undefined && normRow[c] !== '') return normRow[c];
+  }
+  // fallback: substring match
+  for (const key in normRow){
+    for (const c of candidates){
+      if (key.includes(c)) return normRow[key];
+    }
+  }
+  return '';
+}
+
+function safeName(s){
+  return String(s || '').trim().replace(/[\\/:*?"<>|]+/g,'').replace(/\s+/g,'_') || 'unnamed';
+}
+
+function readSheet(file){
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try{
+        const wb = XLSX.read(e.target.result, {type:'array'});
+        const first = wb.SheetNames[0];
+        const rows = XLSX.utils.sheet_to_json(wb.Sheets[first], {defval:''});
+        resolve(rows);
+      } catch(err){ reject(err); }
+    };
+    reader.onerror = reject;
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+function setupDrop(dropId, inputId, onFile){
+  const drop = document.getElementById(dropId);
+  const input = document.getElementById(inputId);
+  drop.addEventListener('click', () => input.click());
+  drop.addEventListener('dragover', e => { e.preventDefault(); });
+  drop.addEventListener('drop', e => {
+    e.preventDefault();
+    if (e.dataTransfer.files.length) { input.files = e.dataTransfer.files; onFile(e.dataTransfer.files[0]); }
+  });
+  input.addEventListener('change', () => {
+    if (input.files.length) onFile(input.files[0]);
+  });
+}
+
+function markDropDone(dropId, label){
+  const el = document.getElementById(dropId);
+  el.classList.add('has-file');
+  el.textContent = '✓ ' + label;
+}
+
+function renderFieldPreview(tableId, rows){
+  const table = document.getElementById(tableId);
+  if (!rows.length){ table.style.display='none'; return; }
+  const headers = Object.keys(rows[0]);
+  table.innerHTML =
+    '<tr><th>Detected columns</th><th>Rows</th></tr>' +
+    '<tr><td>' + headers.map(h=>'<code>'+h+'</code>').join(' ') + '</td><td>' + rows.length + '</td></tr>';
+  table.style.display = 'table';
+}
+
+function log(elId, msg){
+  const el = document.getElementById(elId);
+  el.style.display = 'block';
+  el.textContent += msg + '\n';
+  el.scrollTop = el.scrollHeight;
+}
+
+function setProgress(id, pct){
+  const wrap = document.getElementById(id);
+  wrap.style.display = 'block';
+  wrap.firstElementChild.style.width = pct + '%';
+}
+
+function showResult(elId, blob, filename, label){
+  const el = document.getElementById(elId);
+  const url = URL.createObjectURL(blob);
+  el.innerHTML = '<a href="'+url+'" download="'+filename+'">⬇ '+label+'</a>';
+  el.style.display = 'block';
+}
+
+/* ---------------------------------------------------------------
+   Tabs
+---------------------------------------------------------------- */
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('panel-' + tab.dataset.tab).classList.add('active');
+  });
+});
+
+/* ---------------------------------------------------------------
+   FEATURE 1: PPTX MERGE
+---------------------------------------------------------------- */
+let pptxTemplateBuffer = null;
+let pptxTemplateName = '';
+let pptxRows = [];
+
+setupDrop('drop-pptx-tpl', 'file-pptx-tpl', async (file) => {
+  pptxTemplateName = file.name.replace(/\.pptx$/i, '');
+  pptxTemplateBuffer = await file.arrayBuffer();
+  markDropDone('drop-pptx-tpl', file.name);
+  maybeEnablePptx();
+});
+
+setupDrop('drop-pptx-data', 'file-pptx-data', async (file) => {
+  try {
+    pptxRows = await readSheet(file);
+    if (!pptxRows.length) throw new Error('No data rows found — check the file has a header row plus at least one entry.');
+    markDropDone('drop-pptx-data', file.name + ' (' + pptxRows.length + ' rows)');
+    renderFieldPreview('pptx-field-preview', pptxRows);
+  } catch (err) {
+    pptxRows = [];
+    document.getElementById('drop-pptx-data').textContent = '✗ Could not read this file — ' + err.message;
+    document.getElementById('drop-pptx-data').classList.remove('has-file');
+  }
+  maybeEnablePptx();
+});
+
+function maybeEnablePptx(){
+  document.getElementById('btn-pptx-zip').disabled = !(pptxTemplateBuffer && pptxRows.length);
+}
+
+// Merge placeholders within a slide/master/layout XML string, handling
+// placeholders split across multiple <a:t> runs inside the same paragraph.
+function mergeSlideXml(xmlString, normRow){
+  const doc = new DOMParser().parseFromString(xmlString, 'application/xml');
+  const paragraphs = doc.getElementsByTagName('a:p');
+  for (let i = 0; i < paragraphs.length; i++){
+    const p = paragraphs[i];
+    const runs = p.getElementsByTagName('a:t');
+    if (!runs.length) continue;
+    let fullText = '';
+    for (let j = 0; j < runs.length; j++) fullText += runs[j].textContent;
+    if (fullText.indexOf('{{') === -1) continue;
+    const merged = fullText.replace(/\{\{\s*([^}]+?)\s*\}\}/g, (match, key) => {
+      const k = norm(key);
+      return (k in normRow) ? normRow[k] : match;
+    });
+    runs[0].textContent = merged;
+    for (let j = 1; j < runs.length; j++) runs[j].textContent = '';
+  }
+  return new XMLSerializer().serializeToString(doc);
+}
+
+async function buildOnePptx(normRow){
+  const zip = await JSZip.loadAsync(pptxTemplateBuffer);
+  const slidePaths = Object.keys(zip.files).filter(p => /^ppt\/slides\/slide\d+\.xml$/.test(p));
+  for (const path of slidePaths){
+    const xml = await zip.file(path).async('string');
+    zip.file(path, mergeSlideXml(xml, normRow));
+  }
+  return await zip.generateAsync({type:'blob', mimeType:'application/vnd.openxmlformats-officedocument.presentationml.presentation'});
+}
+
+document.getElementById('btn-pptx-zip').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-pptx-zip');
+  btn.disabled = true;
+  document.getElementById('pptx-log').textContent = '';
+  document.getElementById('pptx-result').style.display = 'none';
+  const outZip = new JSZip();
+  const usedNames = {};
+  let successCount = 0;
+
+  try {
+    for (let i = 0; i < pptxRows.length; i++){
+      const normRow = normalizeRow(pptxRows[i]);
+      const first = findField(normRow, ['firstname','first']);
+      const second = findField(normRow, ['secondname','lastname','surname','second','last']);
+      let filename = safeName(pptxTemplateName) + '_' + safeName(first) + '_' + safeName(second) + '.pptx';
+      if (usedNames[filename]){ usedNames[filename]++; filename = filename.replace(/\.pptx$/,'') + '_' + usedNames[filename] + '.pptx'; }
+      else usedNames[filename] = 1;
+
+      try {
+        const blob = await buildOnePptx(normRow);
+        outZip.file(filename, blob);
+        log('pptx-log', '✓ ' + filename);
+        successCount++;
+      } catch(err){
+        log('pptx-log', '✗ row ' + (i+1) + ' failed: ' + err.message);
+      }
+      setProgress('pptx-progress', Math.round(((i+1)/pptxRows.length)*100));
+    }
+
+    if (successCount === 0){
+      log('pptx-log', 'No files were generated — check the template is a valid .pptx and try again.');
+      return;
+    }
+    const finalBlob = await outZip.generateAsync({type:'blob'});
+    showResult('pptx-result', finalBlob, safeName(pptxTemplateName) + '_merged.zip', 'Download ' + successCount + ' PPTX files (.zip)');
+  } catch(err){
+    log('pptx-log', '✗ Generation stopped: ' + err.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+/* ---------------------------------------------------------------
+   FEATURE 2: QR CODE BATCH
+---------------------------------------------------------------- */
+let qrRows = [];
+
+setupDrop('drop-qr-data', 'file-qr-data', async (file) => {
+  try {
+    qrRows = await readSheet(file);
+    if (!qrRows.length) throw new Error('No data rows found — check the file has a header row plus at least one entry.');
+    markDropDone('drop-qr-data', file.name + ' (' + qrRows.length + ' rows)');
+    renderFieldPreview('qr-field-preview', qrRows);
+  } catch (err) {
+    qrRows = [];
+    document.getElementById('drop-qr-data').textContent = '✗ Could not read this file — ' + err.message;
+    document.getElementById('drop-qr-data').classList.remove('has-file');
+  }
+  const enable = qrRows.length > 0;
+  document.getElementById('btn-qr-zip').disabled = !enable;
+  document.getElementById('btn-qr-pdf').disabled = !enable;
+});
+
+// Renders text to a PNG data URL using the qrcode-generator library (no DOM needed).
+function qrPngDataUrl(text, cellSize){
+  cellSize = cellSize || 8;
+  const qr = qrcode(0, 'M'); // type 0 = auto-detect smallest version
+  qr.addData(String(text || ''));
+  qr.make();
+  const count = qr.getModuleCount();
+  const margin = 4;
+  const size = (count + margin*2) * cellSize;
+  const canvas = document.createElement('canvas');
+  canvas.width = size; canvas.height = size;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0,0,size,size);
+  ctx.fillStyle = '#000000';
+  for (let r = 0; r < count; r++){
+    for (let c = 0; c < count; c++){
+      if (qr.isDark(r,c)){
+        ctx.fillRect((c+margin)*cellSize, (r+margin)*cellSize, cellSize, cellSize);
+      }
+    }
+  }
+  return canvas.toDataURL('image/png');
+}
+
+function dataUrlToBlob(dataUrl){
+  const parts = dataUrl.split(',');
+  const bin = atob(parts[1]);
+  const arr = new Uint8Array(bin.length);
+  for (let i=0;i<bin.length;i++) arr[i] = bin.charCodeAt(i);
+  return new Blob([arr], {type:'image/png'});
+}
+
+async function runQrBatch(mode){ // mode: 'png' or 'pdf'
+  const btnId = mode === 'png' ? 'btn-qr-zip' : 'btn-qr-pdf';
+  const btn = document.getElementById(btnId);
+  btn.disabled = true;
+  document.getElementById('qr-log').textContent = '';
+  document.getElementById('qr-result').style.display = 'none';
+  const outZip = new JSZip();
+  const usedNames = {};
+  const { jsPDF } = window.jspdf;
+  let successCount = 0;
+
+  try {
+    for (let i = 0; i < qrRows.length; i++){
+      const normRow = normalizeRow(qrRows[i]);
+      const first = findField(normRow, ['firstname','first']);
+      const second = findField(normRow, ['secondname','lastname','surname','second','last']);
+      const link = findField(normRow, ['qrlink','link','url','qr']);
+      let base = safeName(first) + '_' + safeName(second);
+      if (usedNames[base]){ usedNames[base]++; base = base + '_' + usedNames[base]; }
+      else usedNames[base] = 1;
+
+      if (!link){
+        log('qr-log', '✗ row ' + (i+1) + ' (' + base + ') skipped — no QR link value found');
+        setProgress('qr-progress', Math.round(((i+1)/qrRows.length)*100));
+        continue;
+      }
+
+      try {
+        const dataUrl = qrPngDataUrl(link);
+        if (mode === 'png'){
+          outZip.file(base + '.png', dataUrlToBlob(dataUrl));
+        } else {
+          const pdf = new jsPDF({unit:'pt', format:[300,300]});
+          pdf.addImage(dataUrl, 'PNG', 20, 20, 260, 260);
+          outZip.file(base + '.pdf', pdf.output('blob'));
+        }
+        log('qr-log', '✓ ' + base + (mode==='png' ? '.png' : '.pdf'));
+        successCount++;
+      } catch(err){
+        log('qr-log', '✗ row ' + (i+1) + ' failed: ' + err.message);
+      }
+      setProgress('qr-progress', Math.round(((i+1)/qrRows.length)*100));
+    }
+
+    if (successCount === 0){
+      log('qr-log', 'No QR codes were generated — check the QR link column has values.');
+      return;
+    }
+    const finalBlob = await outZip.generateAsync({type:'blob'});
+    const label = mode === 'png' ? 'PNG' : 'PDF';
+    showResult('qr-result', finalBlob, 'qrcodes_' + label.toLowerCase() + '.zip', 'Download ' + successCount + ' QR ' + label + ' files (.zip)');
+  } catch(err){
+    log('qr-log', '✗ Generation stopped: ' + err.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+document.getElementById('btn-qr-zip').addEventListener('click', () => runQrBatch('png'));
+document.getElementById('btn-qr-pdf').addEventListener('click', () => runQrBatch('pdf'));
+
+/* ---------------------------------------------------------------
+   PWA: install offline support (safe no-op if sw.js isn't hosted,
+   e.g. when opening this file directly with file://)
+---------------------------------------------------------------- */
+if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => {
+      /* offline support just won't be available; app still works online */
+    });
+  });
+}
+</script>
+
+</body>
+</html>
