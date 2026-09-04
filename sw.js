@@ -1,7 +1,8 @@
 // RollCall service worker
+// Built & owned by Arumugam Mariappan (m_aru_1978@yahoo.com)
 // Bump CACHE_VERSION on every deploy so returning users get the new files
 // instead of a stale cached copy.
-const CACHE_VERSION = 'rollcall-v2';
+const CACHE_VERSION = 'rollcall-v3';
 
 const APP_SHELL = [
   './',
@@ -12,7 +13,9 @@ const APP_SHELL = [
   './icons/favicon-32.png',
   './icons/icon-192.png',
   './icons/icon-512.png',
-  './icons/icon-512-maskable.png'
+  './icons/icon-512-maskable.png',
+  './screenshots/wide.png',
+  './screenshots/mobile.png'
 ];
 
 // Third-party library CDNs used by index.html — cached so the app still
